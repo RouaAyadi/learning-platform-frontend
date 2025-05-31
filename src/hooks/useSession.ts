@@ -1,134 +1,138 @@
 'use client'
 
 import { useQuery, useMutation } from '@apollo/client'
-import { GET_SESSION, GET_RECENT_MESSAGES } from '@/lib/graphql/queries'
-import {
-  CREATE_MESSAGE,
-  START_LIVE_SESSION,
-  END_LIVE_SESSION,
-  CREATE_QUIZ,
-} from '@/lib/graphql/mutations'
+import { GET_SESSION, GET_SESSIONS } from '@/lib/graphql/queries'
+import { CREATE_MESSAGE, START_LIVE_SESSION, END_LIVE_SESSION } from '@/lib/graphql/mutations'
 
-export function useSession(sessionId: string) {
-  // Fetch session data
-  const {
-    data: sessionData,
-    loading: sessionLoading,
-    error: sessionError,
-  } = useQuery(GET_SESSION, {
-    variables: { id: parseInt(sessionId) },
-    pollInterval: 5000, // Poll every 5 seconds for updates
-  })
+enum UserRole {
+  STUDENT = 'STUDENT',
+  INSTRUCTOR = 'INSTRUCTOR',
+  ADMIN = 'ADMIN',
+}
 
-  // Fetch recent messages
-  const {
-    data: messagesData,
-    loading: messagesLoading,
-    error: messagesError,
-  } = useQuery(GET_RECENT_MESSAGES, {
-    variables: { sessionId: parseInt(sessionId), limit: 50 },
-    pollInterval: 2000, // Poll every 2 seconds for new messages
-  })
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+}
 
-  // Mutations
-  const [createMessage] = useMutation(CREATE_MESSAGE, {
-    refetchQueries: [
-      {
-        query: GET_RECENT_MESSAGES,
-        variables: { sessionId: parseInt(sessionId), limit: 50 },
-      },
-    ],
-  })
+interface Course {
+  id: number;
+  title: string;
+  description: string;
+}
 
-  const [startLiveSession] = useMutation(START_LIVE_SESSION, {
-    refetchQueries: [
-      {
+interface Message {
+  id: number;
+  content: string;
+  timestamp: string;
+  sender: User;
+}
+
+interface QuizQuestion {
+  id: number;
+  questionText: string;
+  options: string[];
+  correctAnswerIndex: number;
+}
+
+interface Quiz {
+  id: number;
+  title: string;
+  questions: QuizQuestion[];
+}
+
+interface Session {
+  id: number;
+  title: string;
+  startTime: string;
+  isLive: boolean;
+  instructor: User;
+  course: Course;
+  messages?: Message[];
+  quizzes?: Quiz[];
+}
+
+export function useSession(sessionId?: string) {
+  const { data: sessionsData, loading: sessionsLoading, error: sessionsError } = useQuery(GET_SESSIONS)
+  const { data: sessionData, loading: sessionLoading, error: sessionError } = useQuery(
+    GET_SESSION,
+    { variables: { id: sessionId ? parseInt(sessionId) : undefined }, skip: !sessionId }
+  )
+
+  const [sendMessage] = useMutation(CREATE_MESSAGE, {
+    update(cache, { data: { createMessage } }) {
+      const { session } = cache.readQuery({ 
         query: GET_SESSION,
-        variables: { id: parseInt(sessionId) },
-      },
-    ],
-  })
+        variables: { id: parseInt(sessionId!) }
+      }) as { session: Session }
 
-  const [endLiveSession] = useMutation(END_LIVE_SESSION, {
-    refetchQueries: [
-      {
+      cache.writeQuery({
         query: GET_SESSION,
-        variables: { id: parseInt(sessionId) },
-      },
-    ],
+        variables: { id: parseInt(sessionId!) },
+        data: {
+          session: {
+            ...session,
+            messages: [...(session.messages || []), createMessage],
+          },
+        },
+      })
+    },
   })
 
-  const [createQuiz] = useMutation(CREATE_QUIZ)
+  const [startLiveSession] = useMutation(START_LIVE_SESSION)
+  const [endLiveSession] = useMutation(END_LIVE_SESSION)
 
-  // Helper functions
-  const sendMessage = async (content: string, senderId: number) => {
+  const handleSendMessage = async (content: string) => {
+    if (!sessionId) return
     try {
-      await createMessage({
+      await sendMessage({
         variables: {
           input: {
             content,
             sessionId: parseInt(sessionId),
-            senderId,
           },
         },
       })
-      return true
     } catch (error) {
       console.error('Error sending message:', error)
-      return false
     }
   }
 
-  const startSession = async () => {
+  const handleStartSession = async () => {
+    if (!sessionId) return
     try {
       await startLiveSession({
-        variables: { id: parseInt(sessionId) },
-      })
-      return true
-    } catch (error) {
-      console.error('Error starting session:', error)
-      return false
-    }
-  }
-
-  const endSession = async () => {
-    try {
-      await endLiveSession({
-        variables: { id: parseInt(sessionId) },
-      })
-      return true
-    } catch (error) {
-      console.error('Error ending session:', error)
-      return false
-    }
-  }
-
-  const createNewQuiz = async (title: string, questions: any[]) => {
-    try {
-      const result = await createQuiz({
         variables: {
-          input: {
-            title,
-            sessionId: parseInt(sessionId),
-            questions,
-          },
+          id: parseInt(sessionId),
         },
       })
-      return result.data.createQuiz
     } catch (error) {
-      console.error('Error creating quiz:', error)
-      return null
+      console.error('Error starting session:', error)
+    }
+  }
+
+  const handleEndSession = async () => {
+    if (!sessionId) return
+    try {
+      await endLiveSession({
+        variables: {
+          id: parseInt(sessionId),
+        },
+      })
+    } catch (error) {
+      console.error('Error ending session:', error)
     }
   }
 
   return {
-    session: sessionData?.session,
-    messages: messagesData?.recentMessages || [],
-    loading: sessionLoading || messagesLoading,
-    error: sessionError || messagesError,
-    sendMessage,
-    startSession,
-    endSession,
-    createNewQuiz,
+    sessions: sessionsData?.sessions as Session[],
+    session: sessionData?.session as Session,
+    loading: sessionsLoading || sessionLoading,
+    error: sessionsError || sessionError,
+    sendMessage: handleSendMessage,
+    startSession: handleStartSession,
+    endSession: handleEndSession,
   }
 } 

@@ -2,82 +2,90 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQuery, useMutation } from '@apollo/client'
 import Navbar from '@/components/layout/navbar'
 import CreateSessionModal from '@/components/modals/CreateSessionModal'
 import { Session } from '@/types/course'
-
-// Mock data for development
-const mockSessions: Session[] = [
-  {
-    id: '1',
-    title: 'JavaScript Fundamentals',
-    courseId: '1',
-    startTime: new Date(Date.now() + 1000 * 60 * 30).toISOString(), // 30 minutes from now
-    endTime: new Date(Date.now() + 1000 * 60 * 90).toISOString(), // 90 minutes from now
-    instructor: {
-      id: 1,
-      name: 'John Doe'
-    },
-    participants: 25,
-    status: 'live',
-    description: 'Introduction to ES6+ features'
-  },
-  {
-    id: '2',
-    title: 'React Hooks Deep Dive',
-    courseId: '2',
-    startTime: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(), // Tomorrow
-    endTime: new Date(Date.now() + 1000 * 60 * 60 * 25).toISOString(),
-    instructor: {
-      id: 2,
-      name: 'Jane Smith'
-    },
-    participants: 15,
-    status: 'scheduled',
-    description: 'Advanced React Hooks patterns and use cases'
-  }
-]
+import { GET_SESSIONS } from '@/lib/graphql/queries'
+import { CREATE_SESSION, SET_REMINDER, JOIN_SESSION } from '@/lib/graphql/mutations'
 
 export default function SessionsPage() {
   const router = useRouter()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [sessions, setSessions] = useState<Session[]>(mockSessions)
   const [reminders, setReminders] = useState<Set<string>>(new Set())
 
-  const handleCreateSession = (data: any) => {
-    const newSession: Session = {
-      id: (sessions.length + 1).toString(),
-      title: data.title,
-      courseId: '1', // Mock courseId
-      startTime: data.startTime,
-      endTime: data.endTime,
-      instructor: {
-        id: 1,
-        name: 'Test User'
-      },
-      participants: 0,
-      status: 'scheduled',
-      description: data.description
+  const { data, loading, error } = useQuery(GET_SESSIONS)
+  const [createSession] = useMutation(CREATE_SESSION, {
+    refetchQueries: [{ query: GET_SESSIONS }]
+  })
+  const [setReminder] = useMutation(SET_REMINDER)
+  const [joinSession] = useMutation(JOIN_SESSION)
+
+  const handleCreateSession = async (formData: any) => {
+    try {
+      await createSession({
+        variables: {
+          input: {
+            title: formData.title,
+            description: formData.description,
+            startTime: formData.startTime,
+            endTime: formData.endTime,
+            courseId: '1' // TODO: Add course selection to form
+          }
+        }
+      })
+    } catch (error) {
+      console.error('Failed to create session:', error)
     }
-    setSessions([...sessions, newSession])
   }
 
-  const handleJoinSession = (sessionId: string) => {
-    router.push(`/sessions/${sessionId}`)
+  const handleJoinSession = async (sessionId: string) => {
+    try {
+      await joinSession({
+        variables: { sessionId }
+      })
+      router.push(`/sessions/${sessionId}`)
+    } catch (error) {
+      console.error('Failed to join session:', error)
+    }
   }
 
-  const toggleReminder = (sessionId: string) => {
-    const newReminders = new Set(reminders)
-    if (newReminders.has(sessionId)) {
-      newReminders.delete(sessionId)
-    } else {
-      newReminders.add(sessionId)
-      // Mock notification
-      setTimeout(() => {
-        alert(`Reminder set for session: ${sessions.find(s => s.id === sessionId)?.title}`)
-      }, 500)
+  const toggleReminder = async (sessionId: string) => {
+    try {
+      if (!reminders.has(sessionId)) {
+        await setReminder({
+          variables: {
+            input: {
+              sessionId,
+              reminderTime: new Date(Date.now() + 1000 * 60 * 15).toISOString() // 15 minutes before
+            }
+          }
+        })
+        const newReminders = new Set(reminders)
+        newReminders.add(sessionId)
+        setReminders(newReminders)
+      }
+    } catch (error) {
+      console.error('Failed to set reminder:', error)
     }
-    setReminders(newReminders)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-base-100 flex items-center justify-center">
+        <div className="loading loading-spinner loading-lg"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-base-100 flex items-center justify-center">
+        <div className="alert alert-error">
+          <span>Error loading sessions. Please try again later.</span>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -98,9 +106,9 @@ export default function SessionsPage() {
         <div className="mb-12">
           <h2 className="text-2xl font-bold mb-4">Active Sessions</h2>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {sessions
-              .filter(session => session.status === 'live')
-              .map(session => (
+            {data?.sessions
+              .filter((session: Session) => session.status === 'live')
+              .map((session: Session) => (
                 <div key={session.id} className="card bg-base-200 shadow-xl">
                   <div className="card-body">
                     <div className="flex items-center justify-between">
@@ -142,9 +150,9 @@ export default function SessionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {sessions
-                  .filter(session => session.status === 'scheduled')
-                  .map(session => (
+                {data?.sessions
+                  .filter((session: Session) => session.status === 'scheduled')
+                  .map((session: Session) => (
                     <tr key={session.id}>
                       <td>{session.title}</td>
                       <td>{session.instructor.name}</td>

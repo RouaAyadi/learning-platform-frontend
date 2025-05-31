@@ -1,45 +1,18 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useQuery, useMutation, useSubscription } from '@apollo/client'
+import { useQuery } from '@apollo/client'
 import { gql } from '@apollo/client'
 import { useAuthStore } from '@/store/auth'
+import { io, Socket } from 'socket.io-client'
 
 const MESSAGES_QUERY = gql`
-  query GetMessages($sessionId: ID!) {
-    messages(sessionId: $sessionId) {
+  query GetMessages($sessionId: Int!) {
+    messagesBySession(sessionId: $sessionId) {
       id
       content
-      createdAt
-      user {
-        id
-        name
-      }
-    }
-  }
-`
-
-const SEND_MESSAGE = gql`
-  mutation SendMessage($sessionId: ID!, $content: String!) {
-    sendMessage(sessionId: $sessionId, content: $content) {
-      id
-      content
-      createdAt
-      user {
-        id
-        name
-      }
-    }
-  }
-`
-
-const MESSAGE_SUBSCRIPTION = gql`
-  subscription OnMessageSent($sessionId: ID!) {
-    messageSent(sessionId: $sessionId) {
-      id
-      content
-      createdAt
-      user {
+      timestamp
+      sender {
         id
         name
       }
@@ -50,8 +23,8 @@ const MESSAGE_SUBSCRIPTION = gql`
 type Message = {
   id: string
   content: string
-  createdAt: string
-  user: {
+  timestamp: string
+  sender: {
     id: number
     name: string
   }
@@ -63,49 +36,67 @@ type ChatWindowProps = {
 
 export default function ChatWindow({ sessionId }: ChatWindowProps) {
   const [message, setMessage] = useState('')
+  const [messages, setMessages] = useState<Message[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
-  const { user } = useAuthStore()
+  const { user, token } = useAuthStore()
+  const sessionIdNumber = parseInt(sessionId, 10)
+  const socketRef = useRef<Socket | null>(null)
 
   const { data, loading } = useQuery(MESSAGES_QUERY, {
-    variables: { sessionId },
-  })
-
-  const [sendMessage] = useMutation(SEND_MESSAGE)
-
-  useSubscription(MESSAGE_SUBSCRIPTION, {
-    variables: { sessionId },
-    onData: ({ data }) => {
-      // Handle new message
-      if (data.data?.messageSent) {
-        // Apollo Cache will automatically update
-        scrollToBottom()
-      }
+    variables: { sessionId: sessionIdNumber },
+    onCompleted: (data) => {
+      setMessages(data?.messagesBySession || [])
     },
   })
+
+  useEffect(() => {
+    if (!user || !token) return
+    const socket = io('http://localhost:3300/chat', {
+      auth: { token: `Bearer ${token}` },
+      transports: ['websocket'],
+    })
+    socketRef.current = socket
+
+    socket.on('connect', () => {
+      socket.emit('joinSession', {
+        sessionId: sessionIdNumber,
+        userId: user.id,
+      })
+    })
+
+    socket.on('recentMessages', (msgs: Message[]) => {
+      setMessages(msgs)
+      scrollToBottom()
+    })
+
+    socket.on('newMessage', (msg: Message) => {
+      setMessages((prev) => [...prev, msg])
+      scrollToBottom()
+    })
+
+
+    return () => {
+      socket.emit('leaveSession', {
+        sessionId: sessionIdNumber,
+        userId: user.id,
+      })
+      socket.disconnect()
+    }
+  }, [user, token, sessionIdNumber])
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [data?.messages])
-
-  const handleSendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!message.trim() || !user) return
-
-    try {
-      await sendMessage({
-        variables: {
-          sessionId,
-          content: message.trim(),
-        },
-      })
-      setMessage('')
-    } catch (error) {
-      console.error('Failed to send message:', error)
-    }
+    if (!message.trim() || !user || !socketRef.current) return
+    socketRef.current.emit('sendMessage', {
+      content: message.trim(),
+      sessionId: sessionIdNumber,
+      senderId: user.id,
+    })
+    setMessage('')
   }
 
   if (loading) {
@@ -115,19 +106,19 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
   return (
     <div className="flex flex-col h-[600px] bg-base-200 rounded-lg">
       <div className="flex-1 overflow-y-auto p-4">
-        {data?.messages.map((msg: Message) => (
+        {messages.map((msg: Message) => (
           <div
             key={msg.id}
-            className={`chat ${msg.user.id === user?.id ? 'chat-end' : 'chat-start'}`}
+            className={`chat ${msg.sender.id === user?.id ? 'chat-end' : 'chat-start'}`}
           >
             <div className="chat-header">
-              {msg.user.name}
+              {msg.sender.name}
               <time className="text-xs opacity-50 ml-1">
-                {new Date(msg.createdAt).toLocaleTimeString()}
+                {new Date(msg.timestamp).toLocaleTimeString()}
               </time>
             </div>
             <div className={`chat-bubble ${
-              msg.user.id === user?.id ? 'chat-bubble-primary' : ''
+              msg.sender.id === user?.id ? 'chat-bubble-primary' : ''
             }`}>
               {msg.content}
             </div>
@@ -151,4 +142,4 @@ export default function ChatWindow({ sessionId }: ChatWindowProps) {
       </form>
     </div>
   )
-} 
+}

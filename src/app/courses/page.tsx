@@ -2,64 +2,41 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQuery, useMutation } from '@apollo/client'
 import Navbar from '@/components/layout/navbar'
 import CreateCourseModal from '@/components/modals/CreateCourseModal'
 import { Course } from '@/types/course'
-
-// Mock data for development
-const mockCourses: Course[] = [
-  {
-    id: '1',
-    title: 'Web Development Basics',
-    description: 'Learn the fundamentals of web development including HTML, CSS, and JavaScript.',
-    instructor: {
-      id: 1,
-      name: 'John Doe'
-    },
-    enrolledStudents: 45,
-    startDate: new Date().toISOString(),
-    endDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString(), // 30 days from now
-    status: 'in-progress'
-  },
-  {
-    id: '2',
-    title: 'Advanced React Patterns',
-    description: 'Deep dive into advanced React patterns and best practices.',
-    instructor: {
-      id: 2,
-      name: 'Jane Smith'
-    },
-    enrolledStudents: 30,
-    startDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(), // 7 days from now
-    endDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 37).toISOString(), // 37 days from now
-    status: 'upcoming'
-  }
-]
+import { GET_COURSES } from '@/lib/graphql/queries'
+import { CREATE_COURSE } from '@/lib/graphql/mutations'
 
 export default function CoursesPage() {
   const router = useRouter()
-  const [courses, setCourses] = useState<Course[]>(mockCourses)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+
+  const { data, loading, error } = useQuery(GET_COURSES)
+  const [createCourse] = useMutation(CREATE_COURSE, {
+    refetchQueries: [{ query: GET_COURSES }]
+  })
 
   const handleViewCourse = (courseId: string) => {
     router.push(`/courses/${courseId}`)
   }
 
-  const handleCreateCourse = (data: any) => {
-    const newCourse: Course = {
-      id: (courses.length + 1).toString(),
-      title: data.title,
-      description: data.description,
-      instructor: {
-        id: 1,
-        name: 'Test User'
-      },
-      enrolledStudents: 0,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      status: 'upcoming'
+  const handleCreateCourse = async (formData: any) => {
+    try {
+      await createCourse({
+        variables: {
+          input: {
+            title: formData.title,
+            description: formData.description,
+            startDate: formData.startDate,
+            endDate: formData.endDate
+          }
+        }
+      })
+    } catch (error) {
+      console.error('Failed to create course:', error)
     }
-    setCourses([...courses, newCourse])
   }
 
   const getStatusBadgeClass = (status: Course['status']) => {
@@ -73,6 +50,24 @@ export default function CoursesPage() {
       default:
         return 'badge-ghost'
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-base-100 flex items-center justify-center">
+        <div className="loading loading-spinner loading-lg"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-base-100 flex items-center justify-center">
+        <div className="alert alert-error">
+          <span>Error loading courses. Please try again later.</span>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -90,7 +85,7 @@ export default function CoursesPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {courses.map(course => (
+          {data?.courses.map((course: Course) => (
             <div key={course.id} className="card bg-base-200 shadow-xl">
               <div className="card-body">
                 <div className="flex items-center justify-between">

@@ -1,5 +1,23 @@
 import { gql } from '@apollo/client'
 
+export const CREATE_COURSE = gql`
+  mutation CreateCourse($input: CreateCourseInput!) {
+    createCourse(input: $input) {
+      id
+      title
+      description
+      instructor {
+        id
+        name
+      }
+      enrolledStudents
+      startDate
+      endDate
+      status
+    }
+  }
+`
+
 export const CREATE_SESSION = gql`
   mutation CreateSession($input: CreateSessionInput!) {
     createSession(createSessionInput: $input) {
@@ -10,10 +28,13 @@ export const CREATE_SESSION = gql`
       instructor {
         id
         name
+        email
+        role
       }
       course {
         id
         title
+        description
       }
     }
   }
@@ -23,6 +44,8 @@ export const START_LIVE_SESSION = gql`
   mutation StartLiveSession($id: Int!) {
     startLiveSession(id: $id) {
       id
+      title
+      startTime
       isLive
     }
   }
@@ -32,6 +55,8 @@ export const END_LIVE_SESSION = gql`
   mutation EndLiveSession($id: Int!) {
     endLiveSession(id: $id) {
       id
+      title
+      startTime
       isLive
     }
   }
@@ -46,6 +71,8 @@ export const CREATE_MESSAGE = gql`
       sender {
         id
         name
+        email
+        role
       }
     }
   }
@@ -75,4 +102,38 @@ export const CREATE_QUIZ_QUESTION = gql`
       correctAnswerIndex
     }
   }
-` 
+`
+
+export const SEND_MESSAGE = gql`
+  mutation SendMessage($input: CreateMessageInput!) {
+    createMessage(createMessageInput: $input) {
+      id
+      content
+      timestamp
+      sender {
+        id
+        name
+      }
+    }
+  }
+`
+
+export const SET_REMINDER = gql`
+  mutation SetReminder($input: SetReminderInput!) {
+    setReminder(input: $input) {
+      id
+      sessionId
+      userId
+      reminderTime
+    }
+  }
+`
+
+export const JOIN_SESSION = gql`
+  mutation JoinSession($sessionId: Int!) {
+    joinSession(sessionId: $sessionId) {
+      id
+      participants
+    }
+  }
+`
