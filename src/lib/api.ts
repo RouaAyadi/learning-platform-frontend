@@ -133,4 +133,33 @@ export const sessionsApi = {
 		const eventSource = new EventSource(url);
 		return eventSource;
 	},
+	subscribeToAlert: async (
+		sessionId: number,
+		instructorId: number,
+		alertType: string,
+		threshold?: number
+	) => {
+		const response = await api.post("/analytics/alerts/subscribe", {
+			sessionId: sessionId.toString(),
+			instructorId: instructorId.toString(),
+			alertType,
+			...(threshold && { threshold }),
+		});
+		return response.data;
+	},
+	unsubscribeFromAlert: async (
+		sessionId: number,
+		instructorId: number,
+		alertType: string
+	) => {
+		const response = await api.delete(
+			`/analytics/alerts/unsubscribe/${sessionId}/${instructorId}/${alertType}`
+		);
+		return response.data;
+	},
+	subscribeToAlertStream: (sessionId: number): EventSource => {
+		const url = `${API_BASE_URL}/analytics/alerts/stream?sessionId=${sessionId}`;
+		const eventSource = new EventSource(url);
+		return eventSource;
+	},
 };

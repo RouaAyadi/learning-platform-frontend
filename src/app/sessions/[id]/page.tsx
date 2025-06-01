@@ -37,6 +37,15 @@ export default function SessionPage() {
 	const [eventSource, setEventSource] = useState<EventSource | null>(
 		null
 	);
+	const [alertSubscriptions, setAlertSubscriptions] = useState<{
+		[key: string]: { subscribed: boolean; threshold: number };
+	}>({
+		student_inactivity: { subscribed: false, threshold: 10 },
+		low_participation: { subscribed: false, threshold: 30 },
+		question_failure_rate: { subscribed: false, threshold: 70 },
+	});
+	const [alertEventSource, setAlertEventSource] =
+		useState<EventSource | null>(null);
 
 	const user = getUser();
 	const isInstructor = user?.role === "instructor";
@@ -59,6 +68,103 @@ export default function SessionPage() {
 
 		setEventSource(newEventSource);
 		setIsSubscribed(true);
+	};
+
+	const handleAlertSubscription = async (
+		alertType: string,
+		threshold: number
+	) => {
+		try {
+			if (!user?.id) return;
+			await sessionsApi.subscribeToAlert(
+				sessionId,
+				user.id,
+				alertType,
+				threshold
+			);
+			setAlertSubscriptions((prev) => {
+				const newState = {
+					...prev,
+					[alertType]: {
+						subscribed: true,
+						threshold,
+					},
+				};
+				// Check if this is the first alert subscription
+				const hasActiveAlerts = Object.values(
+					newState
+				).some((alert) => alert.subscribed);
+				if (hasActiveAlerts && !alertEventSource) {
+					const newAlertEventSource =
+						sessionsApi.subscribeToAlertStream(
+							sessionId
+						);
+					newAlertEventSource.onmessage = (
+						event
+					) => {
+						const notification = event.data;
+						window.dispatchEvent(
+							new CustomEvent(
+								"sse-notification",
+								{
+									detail: notification,
+								}
+							)
+						);
+					};
+					setAlertEventSource(
+						newAlertEventSource
+					);
+				}
+				return newState;
+			});
+		} catch (error) {
+			console.error("Failed to subscribe to alert:", error);
+		}
+	};
+
+	const handleAlertUnsubscription = async (alertType: string) => {
+		try {
+			if (!user?.id) return;
+			await sessionsApi.unsubscribeFromAlert(
+				sessionId,
+				user.id,
+				alertType
+			);
+			setAlertSubscriptions((prev) => {
+				const newState = {
+					...prev,
+					[alertType]: {
+						...prev[alertType],
+						subscribed: false,
+					},
+				};
+				// Check if no alerts are active anymore
+				const hasActiveAlerts = Object.values(
+					newState
+				).some((alert) => alert.subscribed);
+				if (!hasActiveAlerts && alertEventSource) {
+					alertEventSource.close();
+					setAlertEventSource(null);
+				}
+				return newState;
+			});
+		} catch (error) {
+			console.error(
+				"Failed to unsubscribe from alert:",
+				error
+			);
+		}
+	};
+
+	const handleThresholdChange = (
+		alertType: string,
+		threshold: number
+	) => {
+		setAlertSubscriptions((prev) => ({
+			...prev,
+			[alertType]: { ...prev[alertType], threshold },
+		}));
 	};
 
 	useEffect(() => {
@@ -88,6 +194,9 @@ export default function SessionPage() {
 			clearInterval(interval);
 			if (eventSource) {
 				eventSource.close();
+			}
+			if (alertEventSource) {
+				alertEventSource.close();
 			}
 		};
 	}, [sessionId, isAuthenticated, router]);
@@ -204,6 +313,158 @@ export default function SessionPage() {
 								</div>
 							</div>
 						</div>
+
+						{/* Alert Configuration - Instructor Only */}
+						{isInstructor && (
+							<div className="card bg-base-200 mt-4">
+								<div className="card-body p-4">
+									<h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+										<svg
+											className="w-4 h-4"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={
+													2
+												}
+												d="M15 17h5l-5 5v-5zM9 7H4l5-5v5zM12 12l8-8M4 4l16 16"
+											/>
+										</svg>
+										Alert
+										Configuration
+									</h3>
+									<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+										{Object.entries(
+											alertSubscriptions
+										).map(
+											([
+												alertType,
+												config,
+											]) => {
+												const alertInfo =
+													{
+														student_inactivity:
+															{
+																label: "Student Inactivity",
+																icon: "👤",
+																desc: "Inactive students",
+															},
+														low_participation:
+															{
+																label: "Low Participation",
+																icon: "📊",
+																desc: "Low engagement",
+															},
+														question_failure_rate:
+															{
+																label: "Question Failures",
+																icon: "❌",
+																desc: "High failure rate",
+															},
+													};
+												const info =
+													alertInfo[
+														alertType as keyof typeof alertInfo
+													];
+
+												return (
+													<div
+														key={
+															alertType
+														}
+														className="bg-base-100 rounded-lg p-3 border border-base-300"
+													>
+														<div className="flex items-center justify-between mb-2">
+															<div className="flex items-center gap-2">
+																<span className="text-lg">
+																	{
+																		info.icon
+																	}
+																</span>
+																<div>
+																	<div className="text-sm font-medium">
+																		{
+																			info.label
+																		}
+																	</div>
+																	<div className="text-xs text-base-content/60">
+																		{
+																			info.desc
+																		}
+																	</div>
+																</div>
+															</div>
+															<button
+																onClick={() => {
+																	if (
+																		config.subscribed
+																	) {
+																		handleAlertUnsubscription(
+																			alertType
+																		);
+																	} else {
+																		handleAlertSubscription(
+																			alertType,
+																			config.threshold
+																		);
+																	}
+																}}
+																className={`btn btn-xs ${
+																	config.subscribed
+																		? "btn-success"
+																		: "btn-outline"
+																}`}
+															>
+																{config.subscribed
+																	? "ON"
+																	: "OFF"}
+															</button>
+														</div>
+														<div className="flex items-center gap-2 text-xs">
+															<span>
+																Threshold:
+															</span>
+															<input
+																type="range"
+																min="0"
+																max="100"
+																value={
+																	config.threshold
+																}
+																className="range range-xs range-primary flex-1"
+																onChange={(
+																	e
+																) =>
+																	handleThresholdChange(
+																		alertType,
+																		parseInt(
+																			e
+																				.target
+																				.value
+																		)
+																	)
+																}
+															/>
+															<span className="font-medium w-8">
+																{
+																	config.threshold
+																}
+
+																%
+															</span>
+														</div>
+													</div>
+												);
+											}
+										)}
+									</div>
+								</div>
+							</div>
+						)}
 					</div>
 
 					{/* Chat Window */}
