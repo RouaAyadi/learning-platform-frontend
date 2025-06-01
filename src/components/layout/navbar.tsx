@@ -4,8 +4,9 @@ import { Fragment } from 'react'
 import { Disclosure, Menu, Transition } from '@headlessui/react'
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import clsx from 'clsx'
+import { useAuthStore } from '@/store/auth'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard' },
@@ -15,6 +16,27 @@ const navigation = [
 
 export default function Navbar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { logout, getUser } = useAuthStore()
+
+  const handleLogout = () => {
+    logout()
+    router.push('/login')
+  }
+
+  const user = getUser()
+
+  // Get user's initials for the avatar
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+
+  const userInitials = user?.name ? getInitials(user.name) : 'UN'
 
   return (
     <Disclosure as="nav" className="bg-base-200">
@@ -51,7 +73,7 @@ export default function Navbar() {
                     <span className="sr-only">Open user menu</span>
                     <div className="avatar placeholder">
                       <div className="bg-neutral text-neutral-content rounded-full w-8">
-                        <span className="text-xs">UN</span>
+                        <span className="text-xs">{userInitials}</span>
                       </div>
                     </div>
                   </Menu.Button>
@@ -65,6 +87,10 @@ export default function Navbar() {
                     leaveTo="transform opacity-0 scale-95"
                   >
                     <Menu.Items className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-base-100 py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                      <div className="px-4 py-2 text-sm text-base-content border-b border-base-300">
+                        <div className="font-medium">{user?.name}</div>
+                        <div className="text-base-content/70 text-xs">{user?.email}</div>
+                      </div>
                       <Menu.Item>
                         {({ active }) => (
                           <Link
@@ -81,6 +107,7 @@ export default function Navbar() {
                       <Menu.Item>
                         {({ active }) => (
                           <button
+                            onClick={handleLogout}
                             className={clsx(
                               active ? 'bg-base-200' : '',
                               'block w-full text-left px-4 py-2 text-sm text-base-content'
@@ -130,13 +157,13 @@ export default function Navbar() {
                 <div className="flex-shrink-0">
                   <div className="avatar placeholder">
                     <div className="bg-neutral text-neutral-content rounded-full w-8">
-                      <span className="text-xs">UN</span>
+                      <span className="text-xs">{userInitials}</span>
                     </div>
                   </div>
                 </div>
                 <div className="ml-3">
-                  <div className="text-base font-medium text-base-content">User Name</div>
-                  <div className="text-sm font-medium text-base-content/70">user@example.com</div>
+                  <div className="text-base font-medium text-base-content">{user?.name || 'User Name'}</div>
+                  <div className="text-sm font-medium text-base-content/70">{user?.email || 'user@example.com'}</div>
                 </div>
               </div>
               <div className="mt-3 space-y-1">
@@ -149,6 +176,7 @@ export default function Navbar() {
                 </Disclosure.Button>
                 <Disclosure.Button
                   as="button"
+                  onClick={handleLogout}
                   className="block w-full px-4 py-2 text-left text-base font-medium text-base-content hover:bg-base-300 hover:text-base-content/80"
                 >
                   Sign out

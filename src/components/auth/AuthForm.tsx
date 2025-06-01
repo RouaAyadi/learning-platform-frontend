@@ -26,17 +26,53 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     try {
       if (mode === 'login') {
-        const { user, token } = await authApi.login(email, password);
-        login(user, token);
-        router.push('/dashboard');
+        const response = await authApi.login(email, password);
+        if (response.access_token) {
+          login(response.access_token);
+          router.push('/dashboard');
+        } else {
+          setError('Invalid response from server: No access token received');
+        }
       } else {
         const name = formData.get('name') as string;
-        const { user, token } = await authApi.register(name, email, password);
-        login(user, token);
-        router.push('/dashboard');
+        if (!name || name.trim().length < 2) {
+          setError('Name must be at least 2 characters long');
+          setLoading(false);
+          return;
+        }
+        if (!email || !email.includes('@')) {
+          setError('Please enter a valid email address');
+          setLoading(false);
+          return;
+        }
+        if (!password || password.length < 6) {
+          setError('Password must be at least 6 characters long');
+          setLoading(false);
+          return;
+        }
+
+        // First register the user
+        await authApi.register(name.trim(), email, password);
+        
+        // Then automatically log them in
+        const loginResponse = await authApi.login(email, password);
+        if (loginResponse.access_token) {
+          login(loginResponse.access_token);
+          router.push('/dashboard');
+        } else {
+          setError('Registration successful but login failed. Please try logging in manually.');
+        }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (err: any) {
+      console.error('Auth error:', err);
+      // Get the most specific error message available
+      const errorMessage = err.response?.data?.message || // Custom message from server
+                          err.response?.data?.error || // Error field from server
+                          err.response?.data || // Raw error data
+                          err.message || // Error message
+                          'An error occurred during authentication';
+      
+      setError(Array.isArray(errorMessage) ? errorMessage[0] : errorMessage);
     } finally {
       setLoading(false);
     }
@@ -64,6 +100,7 @@ export function AuthForm({ mode }: AuthFormProps) {
               type="text"
               name="name"
               required
+              minLength={2}
               className="input input-bordered w-full"
               placeholder="Enter your name"
             />
@@ -91,6 +128,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             type="password"
             name="password"
             required
+            minLength={6}
             className="input input-bordered w-full"
             placeholder="Enter your password"
           />

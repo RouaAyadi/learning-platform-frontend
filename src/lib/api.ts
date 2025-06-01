@@ -39,6 +39,7 @@ export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    'Accept': 'application/json'
   },
 });
 
@@ -54,12 +55,41 @@ api.interceptors.request.use((config) => {
 // Auth API endpoints
 export const authApi = {
   login: async (email: string, password: string): Promise<AuthResponse> => {
-    const response = await api.post<AuthResponse>('/user/login', { email, password });
-    return response.data;
+    try {
+      const payload = {
+        username: email,
+        password
+      };
+      console.log('Login payload:', payload);
+      const response = await api.post<AuthResponse>('/user/login', payload);
+      return response.data;
+    } catch (error: any) {
+      console.error('Login error details:', {
+        response: error.response?.data,
+        status: error.response?.status,
+        headers: error.response?.headers
+      });
+      throw error;
+    }
   },
   register: async (name: string, email: string, password: string): Promise<AuthResponse> => {
-    const response = await api.post<AuthResponse>('/user', { name, email, password });
-    return response.data;
+    try {
+      const payload = {
+        name,
+        email,
+        password
+      };
+      console.log('Registration payload:', payload);
+      const response = await api.post<AuthResponse>('/user', payload);
+      return response.data;
+    } catch (error: any) {
+      console.error('Registration error details:', {
+        response: error.response?.data,
+        status: error.response?.status,
+        headers: error.response?.headers
+      });
+      throw error;
+    }
   },
   getCurrentUser: async (): Promise<User> => {
     const response = await api.get<User>('/user/');
