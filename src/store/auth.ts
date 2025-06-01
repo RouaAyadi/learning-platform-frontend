@@ -61,7 +61,6 @@ export const useAuthStore = create<AuthStore>()(
       getUser: () => {
         const token = get().token
         if (!token) return null
-        console.log(decodeToken(token));
         return decodeToken(token)
       },
       login: (token) => {

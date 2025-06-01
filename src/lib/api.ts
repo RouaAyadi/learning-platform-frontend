@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { AuthResponse, User } from '@/store/auth';
+import { getAuthToken } from '@/lib/auth';
 
 interface Instructor {
   id: number;
@@ -110,5 +111,59 @@ export const sessionsApi = {
   getSession: async (sessionId: number): Promise<Session> => {
     const response = await api.get<Session>(`/sessions/${sessionId}`);
     return response.data;
+  },
+};
+
+export const coursesApi = {
+  async getCourse(courseId: number) {
+    const response = await fetch(`${API_BASE_URL}/courses/${courseId}`, {
+      headers: {
+        'Authorization': `Bearer ${getAuthToken()}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch course');
+    }
+
+    return response.json();
+  },
+
+  async getCourses() {
+    const response = await fetch(`${API_BASE_URL}/courses`, {
+      headers: {
+        'Authorization': `Bearer ${getAuthToken()}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch courses');
+    }
+
+    return response.json();
+  },
+
+  async createCourse(data: {
+    title: string;
+    description: string;
+    startDate: string;
+    endDate: string;
+  }) {
+    const response = await fetch(`${API_BASE_URL}/courses`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${getAuthToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to create course');
+    }
+
+    return response.json();
   },
 }; 
