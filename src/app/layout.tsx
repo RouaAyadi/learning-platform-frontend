@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { Providers } from './providers'
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
 export const metadata: Metadata = {
   title: 'Learning Platform',
@@ -12,11 +13,24 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // Only guard non-auth pages
+  const isBrowser = typeof window !== 'undefined';
+  let isAuthPage = false;
+  if (isBrowser) {
+    const path = window.location.pathname;
+    isAuthPage = path.startsWith('/login') || path.startsWith('/register');
+  }
   return (
     <html lang="en" data-theme="light">
       <body>
-        <Providers>{children}</Providers>
+        {isAuthPage ? (
+          <Providers>{children}</Providers>
+        ) : (
+          <AuthGuard>
+            <Providers>{children}</Providers>
+          </AuthGuard>
+        )}
       </body>
     </html>
-  )
+  );
 }

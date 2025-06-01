@@ -6,12 +6,11 @@ import { useAuthStore } from '@/store/auth'
 import { AuthForm } from '@/components/auth/AuthForm'
 import Link from 'next/link'
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter()
   const { isAuthenticated } = useAuthStore()
 
   useEffect(() => {
-    // Auto-redirect to dashboard since we're always authenticated in development
     if (isAuthenticated) {
       router.push('/dashboard')
     }
@@ -27,11 +26,11 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-base-100 p-4">
-      <AuthForm mode="login" />
+      <AuthForm mode="register" />
       <p className="mt-4 text-sm">
-        Don't have an account?{' '}
-        <Link href="/register" className="link link-primary">
-          Create one here
+        Already have an account?{' '}
+        <Link href="/login" className="link link-primary">
+          Sign in here
         </Link>
       </p>
     </div>

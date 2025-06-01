@@ -1,35 +1,64 @@
 'use client'
 
-import { useParams } from 'next/navigation'
-import { useRouter } from 'next/navigation'
-import { useQuery, useSubscription } from '@apollo/client'
+import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import Navbar from '@/components/layout/navbar'
 import ChatWindow from '@/components/chat/ChatWindow'
 import { useAuthStore } from '@/store/auth'
-import { GET_SESSION } from '@/lib/graphql/queries'
-import { SESSION_UPDATED } from '@/lib/graphql/subscriptions'
+import { sessionsApi } from '@/lib/api'
+
+interface Instructor {
+  id: number
+  name: string
+  email: string
+  role: string
+}
+
+interface Session {
+  id: number
+  title: string
+  description: string
+  startTime: string
+  endTime: string
+  status: 'scheduled' | 'live' | 'ended'
+  instructor: Instructor
+  participants: number
+}
 
 export default function SessionPage() {
   const params = useParams()
   const router = useRouter()
   const { isAuthenticated } = useAuthStore()
-  const sessionId = params.id as string
+  const sessionId = parseInt(params.id as string, 10)
+  const [session, setSession] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const { data, loading, error } = useQuery(GET_SESSION, {
-    variables: { id: parseInt(sessionId, 10) },
-    skip: !sessionId
-  })
-
-  useSubscription(SESSION_UPDATED, {
-    variables: { sessionId },
-    onData: ({ data }) => {
-      // Handle session updates (e.g., participant count, status changes)
-      console.log('Session updated:', data)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login')
+      return
     }
-  })
+
+    const fetchSession = async () => {
+      try {
+        const data = await sessionsApi.getSession(sessionId)
+        setSession(data as Session)
+        setLoading(false)
+      } catch (err) {
+        setError('Failed to load session')
+        setLoading(false)
+      }
+    }
+
+    fetchSession()
+
+    // Poll for session updates every 30 seconds
+    const interval = setInterval(fetchSession, 30000)
+    return () => clearInterval(interval)
+  }, [sessionId, isAuthenticated, router])
 
   if (!isAuthenticated) {
-    router.push('/login')
     return null
   }
 
@@ -41,17 +70,15 @@ export default function SessionPage() {
     )
   }
 
-  if (error || !data?.session) {
+  if (error || !session) {
     return (
       <div className="min-h-screen bg-base-100 flex items-center justify-center">
         <div className="alert alert-error">
-          <span>Error loading session. Please try again later.</span>
+          <span>{error || 'Session not found'}</span>
         </div>
       </div>
     )
   }
-
-  const session = data.session
 
   return (
     <div className="min-h-screen bg-base-100">
@@ -88,7 +115,7 @@ export default function SessionPage() {
 
           {/* Chat Window */}
           <div className="lg:col-span-1">
-            <ChatWindow sessionId={sessionId} />
+            <ChatWindow sessionId={sessionId.toString()} />
           </div>
         </div>
       </main>
