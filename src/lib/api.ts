@@ -158,6 +158,11 @@ export const sessionsApi = {
 		);
 		return response.data;
 	},
+  subscribeToAlertStream: (sessionId: number): EventSource => {
+		const url = `${API_BASE_URL}/analytics/alerts/stream?sessionId=${sessionId}`;
+		const eventSource = new EventSource(url);
+		return eventSource;
+	},
 };
 
 export const coursesApi = {

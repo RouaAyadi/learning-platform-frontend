@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import Navbar from "@/components/layout/navbar";
 import { useAuthStore } from "@/store/auth";
 import { sessionsApi } from "@/lib/api";
@@ -15,6 +15,7 @@ interface Instructor {
 }
 
 interface Session {
+  participants: number;
   id: number
   title: string
   description: string
@@ -483,9 +484,10 @@ export default function SessionPage() {
 
 					{/* Chat Window */}
 					<div className="lg:col-span-1">
-						<ChatWindow
-							sessionId={sessionId.toString()}
-						/>
+						<SocketIOChat
+							sessionId={sessionId}
+							
+							/>
 					</div>
 				</div>
 			</main>

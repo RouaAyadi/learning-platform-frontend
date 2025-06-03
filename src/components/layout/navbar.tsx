@@ -44,7 +44,7 @@ export default function Navbar() {
 		router.push("/login");
 	};
 
-	const user = getUser();
+	const user = useAuthStore(state => state.getUser && state.getUser());
 
 	// Listen for SSE notifications from window events
 	useEffect(() => {
@@ -385,3 +385,4 @@ export default function Navbar() {
 		</Disclosure>
 	);
 }
+
